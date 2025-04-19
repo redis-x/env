@@ -44,7 +44,14 @@
 		"type": "git",
 		"url": "git+https://github.com/redis-x/env.git"
 	},
-	"keywords": [],
+	"keywords": [
+		"redis",
+		"redis-x",
+		"env",
+		"environment",
+		"config",
+		"configuration"
+	],
 	"author": "Daniil Kirichenko (https://twitter.com/kirickme)",
 	"license": "MIT",
 	"bugs": {
