@@ -8,7 +8,7 @@ import {
 } from 'vitest';
 import { createClient } from 'redis';
 import * as v from 'valibot';
-import { createRedisEnv } from './main.js';
+import { createRedisXEnv } from './main.js';
 
 const redisClient = createClient({
 	socket: {
@@ -30,7 +30,7 @@ async function updateEnv(env?: Record<string, string>) {
 }
 
 describe('correct setup', () => {
-	let redisEnv;
+	let redisXEnv;
 
 	beforeAll(async () => {
 		await updateEnv({
@@ -39,7 +39,7 @@ describe('correct setup', () => {
 			baz: JSON.stringify({ qux: 'quux' }),
 		});
 
-		redisEnv = await createRedisEnv(
+		redisXEnv = await createRedisXEnv(
 			redisClient,
 			'test',
 			v.parser(v.object({
@@ -66,19 +66,19 @@ describe('correct setup', () => {
 
 	test('get', () => {
 		expect(
-			redisEnv.get('foo'),
+			redisXEnv.get('foo'),
 		).toBe('bar');
 		expect(
-			redisEnv.get('bar'),
+			redisXEnv.get('bar'),
 		).toBe(42);
 		expect(
-			redisEnv.get('baz'),
+			redisXEnv.get('baz'),
 		).toStrictEqual({ qux: 'quux' });
 	});
 
 	test('mget', () => {
 		expect(
-			redisEnv.mget('foo', 'bar'),
+			redisXEnv.mget('foo', 'bar'),
 		).toStrictEqual({
 			foo: 'bar',
 			bar: 42,
@@ -87,8 +87,8 @@ describe('correct setup', () => {
 
 	test('get after update', async () => {
 		await redisClient.MULTI()
-			.HSET(redisEnv.redis_key, 'bar', '69')
-			.PUBLISH(redisEnv.redis_key, '')
+			.HSET(redisXEnv.redis_key, 'bar', '69')
+			.PUBLISH(redisXEnv.redis_key, '')
 			.EXEC();
 
 		await new Promise((resolve) => {
@@ -96,13 +96,13 @@ describe('correct setup', () => {
 		});
 
 		expect(
-			redisEnv.get('foo'),
+			redisXEnv.get('foo'),
 		).toBe('bar');
 		expect(
-			redisEnv.get('bar'),
+			redisXEnv.get('bar'),
 		).toBe(69);
 		expect(
-			redisEnv.get('baz'),
+			redisXEnv.get('baz'),
 		).toStrictEqual({ qux: 'quux' });
 	});
 });
@@ -113,7 +113,7 @@ test('invalid property on the server', async () => {
 		bar: '-42', // negative value
 	});
 
-	const redisEnv = await createRedisEnv(
+	const redisXEnv = await createRedisXEnv(
 		redisClient,
 		'test',
 		v.parser(v.object({
@@ -126,14 +126,14 @@ test('invalid property on the server', async () => {
 		})),
 	);
 
-	expect(() => redisEnv.get('foo')).toThrow('Cannot read from namespace "test"');
-	expect(() => redisEnv.get('bar')).toThrow('Cannot read from namespace "test"');
+	expect(() => redisXEnv.get('foo')).toThrow('Cannot read from namespace "test"');
+	expect(() => redisXEnv.get('bar')).toThrow('Cannot read from namespace "test"');
 });
 
 test('namespace does not exist', async () => {
 	await updateEnv();
 
-	const redisEnv = await createRedisEnv(
+	const redisXEnv = await createRedisXEnv(
 		redisClient,
 		'test',
 		v.parser(v.object({
@@ -141,6 +141,6 @@ test('namespace does not exist', async () => {
 		})),
 	);
 
-	expect(() => redisEnv.get('foo')).toThrow('Cannot read from namespace "test"');
-	expect(() => redisEnv.get('bar')).toThrow('Cannot read from namespace "test"');
+	expect(() => redisXEnv.get('foo')).toThrow('Cannot read from namespace "test"');
+	expect(() => redisXEnv.get('bar')).toThrow('Cannot read from namespace "test"');
 });

@@ -7,7 +7,9 @@ import type {
 
 type RedisClient = RedisClientType<RedisFunctions, RedisModules, RedisScripts>;
 
-export class RedisEnv<const T extends Record<string, unknown>> {
+const no_new_symbol = Symbol('no_new');
+
+export class RedisXEnv<const T extends Record<string, unknown>> {
 	private redisClient: RedisClient;
 	private redisSubClient: RedisClient;
 	private namespace: string;
@@ -19,7 +21,12 @@ export class RedisEnv<const T extends Record<string, unknown>> {
 		redisClient: RedisClient,
 		namespace: string,
 		validator: (value: unknown) => T,
+		_protection: typeof no_new_symbol,
 	) {
+		if (_protection !== no_new_symbol) {
+			throw new Error('[@redis-x/env] Do not use new RedisXEnv(), use createRedisXEnv() instead.');
+		}
+
 		this.redisClient = redisClient;
 		this.redisSubClient = redisClient.duplicate();
 
@@ -87,12 +94,17 @@ export class RedisEnv<const T extends Record<string, unknown>> {
  * @param validator The validator function for the environment.
  * @returns A new RedisEnv instance.
  */
-export async function createRedisEnv<const T extends Record<string, unknown>>(
+export async function createRedisXEnv<const T extends Record<string, unknown>>(
 	redisClient: RedisClient,
 	namespace: string,
 	validator: (value: unknown) => T,
 ) {
-	const redisEnv = new RedisEnv(redisClient, namespace, validator);
+	const redisEnv = new RedisXEnv(
+		redisClient,
+		namespace,
+		validator,
+		no_new_symbol,
+	);
 
 	await Promise.all([
 		// @ts-expect-error Accessing private property.

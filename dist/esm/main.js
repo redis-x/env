@@ -1,11 +1,15 @@
-export class RedisEnv {
+const no_new_symbol = Symbol('no_new');
+export class RedisXEnv {
     redisClient;
     redisSubClient;
     namespace;
     redis_key;
     validator;
     storage = null;
-    constructor(redisClient, namespace, validator) {
+    constructor(redisClient, namespace, validator, _protection) {
+        if (_protection !== no_new_symbol) {
+            throw new Error('[@redis-x/env] Do not use new RedisXEnv(), use createRedisXEnv() instead.');
+        }
         this.redisClient = redisClient;
         this.redisSubClient = redisClient.duplicate();
         this.namespace = namespace;
@@ -58,8 +62,8 @@ export class RedisEnv {
  * @param validator The validator function for the environment.
  * @returns A new RedisEnv instance.
  */
-export async function createRedisEnv(redisClient, namespace, validator) {
-    const redisEnv = new RedisEnv(redisClient, namespace, validator);
+export async function createRedisXEnv(redisClient, namespace, validator) {
+    const redisEnv = new RedisXEnv(redisClient, namespace, validator, no_new_symbol);
     await Promise.all([
         // @ts-expect-error Accessing private property.
         redisEnv.reload(),

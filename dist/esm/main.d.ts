@@ -1,13 +1,14 @@
 import type { RedisClientType, RedisFunctions, RedisModules, RedisScripts } from 'redis';
 type RedisClient = RedisClientType<RedisFunctions, RedisModules, RedisScripts>;
-export declare class RedisEnv<const T extends Record<string, unknown>> {
+declare const no_new_symbol: unique symbol;
+export declare class RedisXEnv<const T extends Record<string, unknown>> {
     private redisClient;
     private redisSubClient;
     private namespace;
     readonly redis_key: string;
     private validator;
     private storage;
-    constructor(redisClient: RedisClient, namespace: string, validator: (value: unknown) => T);
+    constructor(redisClient: RedisClient, namespace: string, validator: (value: unknown) => T, _protection: typeof no_new_symbol);
     private subscribe;
     private reload;
     get<const K extends string>(key: K): Readonly<T[K]>;
@@ -20,5 +21,5 @@ export declare class RedisEnv<const T extends Record<string, unknown>> {
  * @param validator The validator function for the environment.
  * @returns A new RedisEnv instance.
  */
-export declare function createRedisEnv<const T extends Record<string, unknown>>(redisClient: RedisClient, namespace: string, validator: (value: unknown) => T): Promise<RedisEnv<T>>;
+export declare function createRedisXEnv<const T extends Record<string, unknown>>(redisClient: RedisClient, namespace: string, validator: (value: unknown) => T): Promise<RedisXEnv<T>>;
 export {};

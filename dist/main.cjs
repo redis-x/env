@@ -20,18 +20,22 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // dist/esm/main.js
 var main_exports = {};
 __export(main_exports, {
-  RedisEnv: () => RedisEnv,
-  createRedisEnv: () => createRedisEnv
+  RedisXEnv: () => RedisXEnv,
+  createRedisXEnv: () => createRedisXEnv
 });
 module.exports = __toCommonJS(main_exports);
-var RedisEnv = class {
+var no_new_symbol = Symbol("no_new");
+var RedisXEnv = class {
   redisClient;
   redisSubClient;
   namespace;
   redis_key;
   validator;
   storage = null;
-  constructor(redisClient, namespace, validator) {
+  constructor(redisClient, namespace, validator, _protection) {
+    if (_protection !== no_new_symbol) {
+      throw new Error("[@redis-x/env] Do not use new RedisXEnv(), use createRedisXEnv() instead.");
+    }
     this.redisClient = redisClient;
     this.redisSubClient = redisClient.duplicate();
     this.namespace = namespace;
@@ -73,8 +77,8 @@ var RedisEnv = class {
     return result;
   }
 };
-async function createRedisEnv(redisClient, namespace, validator) {
-  const redisEnv = new RedisEnv(redisClient, namespace, validator);
+async function createRedisXEnv(redisClient, namespace, validator) {
+  const redisEnv = new RedisXEnv(redisClient, namespace, validator, no_new_symbol);
   await Promise.all([
     // @ts-expect-error Accessing private property.
     redisEnv.reload(),
@@ -85,6 +89,6 @@ async function createRedisEnv(redisClient, namespace, validator) {
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  RedisEnv,
-  createRedisEnv
+  RedisXEnv,
+  createRedisXEnv
 });
