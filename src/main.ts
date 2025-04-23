@@ -65,7 +65,7 @@ export class RedisXEnv<const T extends Record<string, unknown>> {
 		}
 	}
 
-	get<const K extends string>(key: K): Readonly<T[K]> {
+	get<const K extends keyof T>(key: K): Readonly<T[K]> {
 		if (!this.storage) {
 			throw new Error(`[@redis-x/env] Cannot read from namespace "${this.namespace}" because it is not loaded. This is likely due to a RedisEnv misconfiguration or an error in the Redis server.`);
 		}
@@ -73,17 +73,17 @@ export class RedisXEnv<const T extends Record<string, unknown>> {
 		return this.storage[key];
 	}
 
-	mget<const K extends string[]>(...keys: K) {
+	mget<const K extends (keyof T)[]>(...keys: K) {
 		if (!this.storage) {
 			throw new Error(`[@redis-x/env] Cannot read from namespace "${this.namespace}" because it is not loaded. This is likely due to a RedisEnv misconfiguration or an error in the Redis server.`);
 		}
 
-		const result: Record<string, unknown> = {};
+		const result = {} as { [key in K[number]]: T[key] };
 		for (const key of keys) {
 			result[key] = this.storage[key];
 		}
 
-		return result as Readonly<{ [key in K[number]]: T[key] }>;
+		return result as Readonly<typeof result>;
 	}
 }
 

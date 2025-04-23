@@ -30,16 +30,11 @@ async function updateEnv(env?: Record<string, string>) {
 }
 
 describe('correct setup', () => {
-	let redisXEnv;
+	let redisXEnv: Awaited<ReturnType<typeof create>>;
 
-	beforeAll(async () => {
-		await updateEnv({
-			foo: 'bar',
-			bar: '42',
-			baz: JSON.stringify({ qux: 'quux' }),
-		});
-
-		redisXEnv = await createRedisXEnv(
+	// eslint-disable-next-line unicorn/consistent-function-scoping
+	async function create() {
+		return await createRedisXEnv(
 			redisClient,
 			'test',
 			v.parser(v.object({
@@ -62,6 +57,16 @@ describe('correct setup', () => {
 				),
 			})),
 		);
+	}
+
+	beforeAll(async () => {
+		await updateEnv({
+			foo: 'bar',
+			bar: '42',
+			baz: JSON.stringify({ qux: 'quux' }),
+		});
+
+		redisXEnv = await create();
 	});
 
 	test('get', () => {
@@ -142,5 +147,8 @@ test('namespace does not exist', async () => {
 	);
 
 	expect(() => redisXEnv.get('foo')).toThrow('Cannot read from namespace "test"');
-	expect(() => redisXEnv.get('bar')).toThrow('Cannot read from namespace "test"');
+	expect(() => redisXEnv.get(
+		// @ts-expect-error Unknown property
+		'bar',
+	)).toThrow('Cannot read from namespace "test"');
 });

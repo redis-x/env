@@ -11,8 +11,8 @@ export declare class RedisXEnv<const T extends Record<string, unknown>> {
     constructor(redisClient: RedisClient, namespace: string, validator: (value: unknown) => T, _protection: typeof no_new_symbol);
     private subscribe;
     private reload;
-    get<const K extends string>(key: K): Readonly<T[K]>;
-    mget<const K extends string[]>(...keys: K): Readonly<{ [key in K[number]]: T[key]; }>;
+    get<const K extends keyof T>(key: K): Readonly<T[K]>;
+    mget<const K extends (keyof T)[]>(...keys: K): Readonly<{ [key in K[number]]: T[key]; }>;
 }
 /**
  * Creates a new RedisEnv instance.
