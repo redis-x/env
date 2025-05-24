@@ -1,9 +1,9 @@
 # @redis-x/env
 
-Store your environment variables in Redis, but access them synchronously in your application.
-
 [![npm version](https://img.shields.io/npm/v/@redis-x/env.svg)](https://www.npmjs.com/package/@redis-x/env)
 [![license](https://img.shields.io/npm/l/@redis-x/env.svg?color=blue)](https://github.com/redis-x/env/blob/main/LICENSE)
+
+Store your environment variables in Redis, but access them synchronously in your application.
 
 ## Features
 
