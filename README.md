@@ -3,7 +3,7 @@
 Store your environment variables in Redis, but access them synchronously in your application.
 
 [![npm version](https://img.shields.io/npm/v/@redis-x/env.svg)](https://www.npmjs.com/package/@redis-x/env)
-[![license](https://img.shields.io/npm/l/@redis-x/env.svg)](https://github.com/redis-x/env/blob/main/LICENSE)
+[![license](https://img.shields.io/npm/l/@redis-x/env.svg?color=blue)](https://github.com/redis-x/env/blob/main/LICENSE)
 
 ## Features
 
@@ -16,10 +16,10 @@ Store your environment variables in Redis, but access them synchronously in your
 ## Installation
 
 ```bash
-bun add @redis-x/env redis
-# or
+bun i @redis-x/env redis
+# or with pnpm
 pnpm add @redis-x/env redis
-# or
+# or with npm
 npm install @redis-x/env redis
 ```
 
@@ -45,18 +45,6 @@ const envValidator = v.parser(v.object({
     v.maxValue(65535),
   ),
   API_KEY: v.string(),
-  DEBUG: v.pipe(
-    v.string(),
-    v.transform((value) => value === 'true'),
-  ),
-  DATABASE_CONFIG: v.pipe(
-    v.string(),
-    v.transform((value) => JSON.parse(value)),
-    v.object({
-      host: v.string(),
-      port: v.number(),
-    }),
-  ),
 }));
 
 // Create RedisEnv instance
@@ -69,8 +57,6 @@ const env = await createRedisEnv(
 // Use your environment variables synchronously
 const port = env.get('PORT'); // returns a number
 const api_key = env.get('API_KEY'); // returns a string
-const is_debug = env.get('DEBUG'); // returns a boolean
-const db_config = env.get('DATABASE_CONFIG'); // returns an object
 
 // Get multiple values at once
 const { PORT, API_KEY } = env.mget('PORT', 'API_KEY');
@@ -89,7 +75,7 @@ const { PORT, API_KEY } = env.mget('PORT', 'API_KEY');
 To update environment variables in Redis, update your hash and publish a message to `@x:env:{namespace}`:
 
 ```redis
-HSET @x:env:myapp PORT 3000 API_KEY secret-key DEBUG true DATABASE_CONFIG '{"host":"localhost","port":5432}'
+HSET @x:env:myapp PORT 3000 API_KEY secret-key
 PUBLISH @x:env:myapp 1
 ```
 
@@ -110,4 +96,4 @@ try {
 
 ## Contributing
 
-Issues and pull requests are welcome at [https://github.com/redis-x/env](https://github.com/redis-x/env).
+Issues and pull requests are welcome at [our GitHub repository](https://github.com/redis-x/env).
