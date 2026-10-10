@@ -1,18 +1,14 @@
-import type { RedisClientType, RedisFunctions, RedisModules, RedisScripts } from 'redis';
+import { RedisClientType, RedisFunctions, RedisModules, RedisScripts } from "redis";
+//#region src/main.d.ts
 type RedisClient = RedisClientType<RedisFunctions, RedisModules, RedisScripts>;
 declare const no_new_symbol: unique symbol;
 export declare class RedisXEnv<const T extends Record<string, unknown>> {
-    private redisClient;
-    private redisSubClient;
-    private namespace;
-    readonly redis_key: string;
-    private validator;
-    private storage;
-    constructor(redisClient: RedisClient, namespace: string, validator: (value: unknown) => T, _protection: typeof no_new_symbol);
-    private subscribe;
-    private reload;
-    get<const K extends keyof T>(key: K): Readonly<T[K]>;
-    mget<const K extends (keyof T)[]>(...keys: K): Readonly<{ [key in K[number]]: T[key]; }>;
+  #private;
+  readonly redis_key: string;
+  constructor(redisClient: RedisClient, namespace: string, validator: (value: unknown) => T, _protection: typeof no_new_symbol);
+  get<const K extends keyof T>(key: K): Readonly<T[K]>;
+  mget<const K extends (keyof T)[]>(...keys: K): Readonly<{ [key in K[number]]: T[key]; }>;
+  destroy(): Promise<void>;
 }
 /**
  * Creates a new RedisEnv instance.
@@ -22,4 +18,5 @@ export declare class RedisXEnv<const T extends Record<string, unknown>> {
  * @returns A new RedisEnv instance.
  */
 export declare function createRedisXEnv<const T extends Record<string, unknown>>(redisClient: RedisClient, namespace: string, validator: (value: unknown) => T): Promise<RedisXEnv<T>>;
+//#endregion
 export {};

@@ -27,7 +27,7 @@ npm install @redis-x/env redis
 
 ```typescript
 import { createClient } from 'redis';
-import { createRedisEnv } from '@redis-x/env';
+import { createRedisXEnv } from '@redis-x/env';
 import * as v from 'valibot';
 
 // Connect to Redis
@@ -48,7 +48,7 @@ const envValidator = v.parser(v.object({
 }));
 
 // Create RedisEnv instance
-const env = await createRedisEnv(
+const env = await createRedisXEnv(
   redisClient,
   'myapp', // namespace
   envValidator,
