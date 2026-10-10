@@ -65,10 +65,15 @@ const { PORT, API_KEY } = env.mget('PORT', 'API_KEY');
 ## How It Works
 
 1. Your environment variables are stored in Redis as a hash with the key `@x:env:{namespace}`
-2. When your application starts, `@redis-x/env` loads and validates all variables
-3. The library subscribes to Redis PubSub to detect changes to your environment
-4. If changes occur, the environment is automatically reloaded and validated
-5. Access is always synchronous after initial loading
+2. During initialization, the library subscribes to Redis PubSub and loads the raw hash
+3. Published changes and subscriber reconnections refresh the cached hash
+4. Each `get()` or `mget()` call validates and transforms a fresh copy of the entire cached hash; `mget()` runs the validator once for all requested keys
+5. Reads are synchronous and use the cached data without another Redis request
+
+Validators run on reads, not during initialization or refresh. They must return
+fresh mutable objects, including class instances, rather than shared defaults or
+cached instances. This lets callers modify returned values without affecting
+subsequent reads. Avoid side effects in validators, since every read runs them again.
 
 ## Updating Environment Variables
 

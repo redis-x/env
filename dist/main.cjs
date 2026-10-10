@@ -6,8 +6,9 @@ var RedisXEnv = class {
 	#redisSubClient;
 	#namespace;
 	#validator;
-	#storage = null;
-	redis_key;
+	#hash = null;
+	/** @internal */
+	_redis_key;
 	constructor(redisClient, namespace, validator, _protection) {
 		if (_protection !== no_new_symbol) throw new Error("[@redis-x/env] Do not use new RedisXEnv(), use createRedisXEnv() instead.");
 		this.#redisClient = redisClient;
@@ -16,8 +17,8 @@ var RedisXEnv = class {
 			console.error(error);
 		});
 		this.#namespace = namespace;
-		this.redis_key = `@x:env:${namespace}`;
 		this.#validator = validator;
+		this._redis_key = `@x:env:${namespace}`;
 	}
 	/** @internal */
 	async _subscribe() {
@@ -25,30 +26,28 @@ var RedisXEnv = class {
 		const reload = () => {
 			this._reload().catch(console.error);
 		};
-		await this.#redisSubClient.subscribe(this.redis_key, reload);
+		await this.#redisSubClient.subscribe(this._redis_key, reload);
 		this.#redisSubClient.on("ready", reload);
 	}
 	/** @internal */
 	async _reload() {
-		const data = await this.#redisClient.HGETALL(this.redis_key);
+		this.#hash = await this.#redisClient.HGETALL(this._redis_key);
+	}
+	get #env() {
+		if (!this.#hash) throw new Error(`[@redis-x/env] Cannot read from namespace "${this.#namespace}" because it is not loaded. This is likely due to a RedisXEnv misconfiguration or an error on the Redis server.`);
 		try {
-			this.#storage = this.#validator(data);
-		} catch (error) {
-			if (process.env.NODE_ENV !== "test") {
-				console.error("[@redis-x/env] Failed to validate namespace. Error below:");
-				console.error(error);
-			}
-			this.#storage = null;
+			return this.#validator({ ...this.#hash });
+		} catch {
+			throw new Error(`[@redis-x/env] Validation failed for namespace "${this.#namespace}".`);
 		}
 	}
 	get(key) {
-		if (!this.#storage) throw new Error(`[@redis-x/env] Cannot read from namespace "${this.#namespace}" because it is not loaded. This is likely due to a RedisEnv misconfiguration or an error in the Redis server.`);
-		return this.#storage[key];
+		return this.#env[key];
 	}
 	mget(...keys) {
-		if (!this.#storage) throw new Error(`[@redis-x/env] Cannot read from namespace "${this.#namespace}" because it is not loaded. This is likely due to a RedisEnv misconfiguration or an error in the Redis server.`);
+		const env = this.#env;
 		const result = {};
-		for (const key of keys) result[key] = this.#storage[key];
+		for (const key of keys) result[key] = env[key];
 		return result;
 	}
 	async destroy() {

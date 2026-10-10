@@ -31,6 +31,20 @@ async function updateEnv(env?: Record<string, string>) {
 	await transaction.EXEC();
 }
 
+async function waitForValue<T>(read: () => T, expected: T): Promise<void> {
+	const deadline = Date.now() + 2000;
+	let value = read();
+	while (!Object.is(value, expected) && Date.now() < deadline) {
+		// oxlint-disable-next-line no-await-in-loop -- Poll the updated cache sequentially.
+		await new Promise((resolve) => {
+			setTimeout(resolve, 10);
+		});
+		value = read();
+	}
+
+	expect(value).toBe(expected);
+}
+
 describe('correct setup', () => {
 	let redisXEnv: Awaited<ReturnType<typeof create>>;
 
@@ -85,13 +99,11 @@ describe('correct setup', () => {
 	test('get after update', async () => {
 		await redisClient
 			.MULTI()
-			.HSET(redisXEnv.redis_key, 'bar', '69')
-			.PUBLISH(redisXEnv.redis_key, '')
+			.HSET(redisXEnv._redis_key, 'bar', '69')
+			.PUBLISH(redisXEnv._redis_key, '')
 			.EXEC();
 
-		await new Promise((resolve) => {
-			setTimeout(resolve, 99);
-		});
+		await waitForValue(() => redisXEnv.get('bar'), 69);
 
 		expect(redisXEnv.get('foo')).toBe('bar');
 		expect(redisXEnv.get('bar')).toBe(69);
@@ -121,10 +133,10 @@ test('invalid property on the server', async () => {
 	);
 
 	expect(() => redisXEnv.get('foo')).toThrow(
-		'Cannot read from namespace "test"',
+		'Validation failed for namespace "test"',
 	);
 	expect(() => redisXEnv.get('bar')).toThrow(
-		'Cannot read from namespace "test"',
+		'Validation failed for namespace "test"',
 	);
 });
 
@@ -142,14 +154,14 @@ test('namespace does not exist', async () => {
 	);
 
 	expect(() => redisXEnv.get('foo')).toThrow(
-		'Cannot read from namespace "test"',
+		'Validation failed for namespace "test"',
 	);
 	expect(() =>
 		redisXEnv.get(
 			// @ts-expect-error Unknown property
 			'bar',
 		),
-	).toThrow('Cannot read from namespace "test"');
+	).toThrow('Validation failed for namespace "test"');
 });
 
 describe('connection lifecycle', () => {
@@ -173,28 +185,19 @@ describe('connection lifecycle', () => {
 
 	test('reloads updates missed while the subscriber was disconnected', async () => {
 		await client.HSET('@x:env:reconnect', { foo: 'before' });
-		let markReloaded: (value: string) => void;
-		// eslint-disable-next-line unicorn/prefer-promise-with-resolvers -- Support Node.js 14.
-		const reloaded = new Promise<string>((resolve) => {
-			markReloaded = resolve;
-		});
-		const env = await createRedisXEnv(client, 'reconnect', (data) => {
-			const parsed = v.parse(v.object({ foo: v.string() }), data);
-			if (parsed.foo === 'after') {
-				markReloaded(parsed.foo);
-			}
-
-			return parsed;
-		});
+		const env = await createRedisXEnv(
+			client,
+			'reconnect',
+			v.parser(v.object({ foo: v.string() })),
+		);
 		expect(env.get('foo')).toBe('before');
 
 		await subscriber.disconnect();
-		await client.HSET(env.redis_key, { foo: 'after' });
-		expect(await client.PUBLISH(env.redis_key, '')).toBe(0);
+		await client.HSET(env._redis_key, { foo: 'after' });
+		expect(await client.PUBLISH(env._redis_key, '')).toBe(0);
 		await subscriber.connect();
 
-		await reloaded;
-		expect(env.get('foo')).toBe('after');
+		await waitForValue(() => env.get('foo'), 'after');
 		await env.destroy();
 	});
 

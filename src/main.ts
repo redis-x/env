@@ -15,8 +15,10 @@ export class RedisXEnv<const T extends Record<string, unknown>> {
 	#redisSubClient: RedisClient;
 	#namespace: string;
 	#validator: (value: unknown) => T;
-	#storage: T | null = null;
-	readonly redis_key: string;
+	#hash: Record<string, string> | null = null;
+	/** @internal */
+	// eslint-disable-next-line unicorn/prefer-private-class-fields
+	_redis_key: string;
 
 	constructor(
 		redisClient: RedisClient,
@@ -38,8 +40,9 @@ export class RedisXEnv<const T extends Record<string, unknown>> {
 		});
 
 		this.#namespace = namespace;
-		this.redis_key = `@x:env:${namespace}`;
 		this.#validator = validator;
+
+		this._redis_key = `@x:env:${namespace}`;
 	}
 
 	/** @internal */
@@ -52,7 +55,7 @@ export class RedisXEnv<const T extends Record<string, unknown>> {
 			this._reload().catch(console.error);
 		};
 
-		await this.#redisSubClient.subscribe(this.redis_key, reload);
+		await this.#redisSubClient.subscribe(this._redis_key, reload);
 
 		// On reconnect, ready fires after node-redis restores the subscription.
 		this.#redisSubClient.on('ready', reload);
@@ -61,47 +64,36 @@ export class RedisXEnv<const T extends Record<string, unknown>> {
 	/** @internal */
 	// eslint-disable-next-line unicorn/prefer-private-class-fields
 	async _reload(): Promise<void> {
-		const data = await this.#redisClient.HGETALL(this.redis_key);
-
-		try {
-			this.#storage = this.#validator(data);
-		} catch (error) {
-			// oxlint-disable-next-line node/no-process-env
-			if (process.env.NODE_ENV !== 'test') {
-				// oxlint-disable-next-line no-console
-				console.error(
-					'[@redis-x/env] Failed to validate namespace. Error below:',
-				);
-				// oxlint-disable-next-line no-console
-				console.error(error);
-			}
-
-			this.#storage = null;
-		}
+		this.#hash = await this.#redisClient.HGETALL(this._redis_key);
 	}
 
-	get<const K extends keyof T>(key: K): Readonly<T[K]> {
-		if (!this.#storage) {
+	get #env(): T {
+		if (!this.#hash) {
 			throw new Error(
-				`[@redis-x/env] Cannot read from namespace "${this.#namespace}" because it is not loaded. This is likely due to a RedisEnv misconfiguration or an error in the Redis server.`,
+				`[@redis-x/env] Cannot read from namespace "${this.#namespace}" because it is not loaded. This is likely due to a RedisXEnv misconfiguration or an error on the Redis server.`,
 			);
 		}
 
-		return this.#storage[key];
+		try {
+			return this.#validator({ ...this.#hash });
+		} catch {
+			throw new Error(
+				`[@redis-x/env] Validation failed for namespace "${this.#namespace}".`,
+			);
+		}
+	}
+
+	get<const K extends keyof T>(key: K): T[K] {
+		return this.#env[key];
 	}
 
 	mget<const K extends (keyof T)[]>(
 		...keys: K
 	): Readonly<{ [key in K[number]]: T[key] }> {
-		if (!this.#storage) {
-			throw new Error(
-				`[@redis-x/env] Cannot read from namespace "${this.#namespace}" because it is not loaded. This is likely due to a RedisEnv misconfiguration or an error in the Redis server.`,
-			);
-		}
-
+		const env = this.#env;
 		const result = {} as { [key in K[number]]: T[key] };
 		for (const key of keys) {
-			result[key] = this.#storage[key];
+			result[key] = env[key];
 		}
 
 		return result;
