@@ -7,76 +7,113 @@ import type {
 
 type RedisClient = RedisClientType<RedisFunctions, RedisModules, RedisScripts>;
 
-export class RedisEnv<const T extends Record<string, unknown>> {
-	private redisClient: RedisClient;
-	private redisSubClient: RedisClient;
-	private namespace: string;
-	readonly redis_key: string;
-	private validator: (value: unknown) => T;
-	private storage: T | null = null;
+const no_new_symbol: unique symbol = Symbol('no_new');
+const symbol_not_ready: unique symbol = Symbol('not_ready');
+const symbol_validation_failed: unique symbol = Symbol('validation_failed');
+
+// oxlint-disable-next-line unicorn/name-replacements
+export class RedisXEnv<const T extends Record<string, unknown>> {
+	#redisClient: RedisClient;
+	#redisSubClient: RedisClient;
+	#namespace: string;
+	#validator: (value: unknown) => T;
+	/** The validated env, `symbol_validation_failed` if the latest loaded hash failed validation, or `symbol_not_ready` before the first load. */
+	#storage: T | typeof symbol_not_ready | typeof symbol_validation_failed =
+		symbol_not_ready;
+	/** @internal */
+	// eslint-disable-next-line unicorn/prefer-private-class-fields
+	_redis_key: string;
 
 	constructor(
 		redisClient: RedisClient,
 		namespace: string,
 		validator: (value: unknown) => T,
+		_protection: typeof no_new_symbol,
 	) {
-		this.redisClient = redisClient;
-		this.redisSubClient = redisClient.duplicate();
+		if (_protection !== no_new_symbol) {
+			throw new Error(
+				'[@redis-x/env] Do not use new RedisXEnv(), use createRedisXEnv() instead.',
+			);
+		}
 
-		this.namespace = namespace;
-		this.redis_key = `@x:env:${namespace}`;
-		this.validator = validator;
+		this.#redisClient = redisClient;
+		this.#redisSubClient = redisClient.duplicate();
+		this.#redisSubClient.on('error', (error) => {
+			// oxlint-disable-next-line no-console
+			console.error(error);
+		});
+
+		this.#namespace = namespace;
+		this.#validator = validator;
+
+		this._redis_key = `@x:env:${namespace}`;
 	}
 
-	private async subscribe() {
-		await this.redisSubClient.connect();
+	/** @internal */
+	// eslint-disable-next-line unicorn/prefer-private-class-fields
+	async _subscribe(): Promise<void> {
+		await this.#redisSubClient.connect();
 
-		await this.redisSubClient.subscribe(
-			this.redis_key,
-			() => {
-				// eslint-disable-next-line no-console
-				this.reload().catch(console.error);
-			},
-		);
+		const reload = () => {
+			// oxlint-disable-next-line no-console, promise/prefer-await-to-then, unicorn/prefer-await
+			this._reload().catch(console.error);
+		};
+
+		await this.#redisSubClient.subscribe(this._redis_key, reload);
+
+		// On reconnect, ready fires after node-redis restores the subscription.
+		this.#redisSubClient.on('ready', reload);
 	}
 
-	private async reload() {
-		const data = await this.redisClient.HGETALL(this.redis_key);
+	/** @internal */
+	// eslint-disable-next-line unicorn/prefer-private-class-fields
+	async _reload(): Promise<void> {
+		const hash = await this.#redisClient.HGETALL(this._redis_key);
 
 		try {
-			this.storage = this.validator(data);
-		}
-		catch (error) {
-			if (process.env.SILENT !== '1') {
-				// eslint-disable-next-line no-console
-				console.error('[@redis-x/env] Failed to validate namespace. Error below:');
-				// eslint-disable-next-line no-console
-				console.error(error);
-			}
-
-			this.storage = null;
+			this.#storage = this.#validator(hash);
+		} catch {
+			// Do not keep or log the error: validator diagnostics may contain rejected values.
+			this.#storage = symbol_validation_failed;
 		}
 	}
 
-	get<const K extends string>(key: K): Readonly<T[K]> {
-		if (!this.storage) {
-			throw new Error(`[@redis-x/env] Cannot read from namespace "${this.namespace}" because it is not loaded. This is likely due to a RedisEnv misconfiguration or an error in the Redis server.`);
+	get #env(): T {
+		if (this.#storage === symbol_not_ready) {
+			throw new Error(
+				`[@redis-x/env] Cannot read from namespace "${this.#namespace}" because it is not loaded. This is likely due to a RedisXEnv misconfiguration or an error on the Redis server.`,
+			);
 		}
 
-		return this.storage[key];
+		if (this.#storage === symbol_validation_failed) {
+			throw new Error(
+				`[@redis-x/env] Validation failed for namespace "${this.#namespace}".`,
+			);
+		}
+
+		return this.#storage;
 	}
 
-	mget<const K extends string[]>(...keys: K) {
-		if (!this.storage) {
-			throw new Error(`[@redis-x/env] Cannot read from namespace "${this.namespace}" because it is not loaded. This is likely due to a RedisEnv misconfiguration or an error in the Redis server.`);
-		}
+	get<const K extends keyof T>(key: K): T[K] {
+		return this.#env[key];
+	}
 
-		const result: Record<string, unknown> = {};
+	mget<const K extends (keyof T)[]>(
+		...keys: K
+	): Readonly<{ [key in K[number]]: T[key] }> {
+		const env = this.#env;
+		const result = {} as { [key in K[number]]: T[key] };
 		for (const key of keys) {
-			result[key] = this.storage[key];
+			result[key] = env[key];
 		}
 
-		return result as Readonly<{ [key in K[number]]: T[key] }>;
+		return result;
+	}
+
+	async destroy(): Promise<void> {
+		if (this.#redisSubClient.isOpen) {
+			await this.#redisSubClient.disconnect();
+		}
 	}
 }
 
@@ -87,19 +124,30 @@ export class RedisEnv<const T extends Record<string, unknown>> {
  * @param validator The validator function for the environment.
  * @returns A new RedisEnv instance.
  */
-export async function createRedisEnv<const T extends Record<string, unknown>>(
+export async function createRedisXEnv<const T extends Record<string, unknown>>(
 	redisClient: RedisClient,
 	namespace: string,
 	validator: (value: unknown) => T,
-) {
-	const redisEnv = new RedisEnv(redisClient, namespace, validator);
+): Promise<RedisXEnv<T>> {
+	const redisEnv = new RedisXEnv(
+		redisClient,
+		namespace,
+		validator,
+		no_new_symbol,
+	);
 
-	await Promise.all([
-		// @ts-expect-error Accessing private property.
-		redisEnv.reload(),
-		// @ts-expect-error Accessing private property.
-		redisEnv.subscribe(),
-	]);
+	try {
+		await redisEnv._subscribe();
+		await redisEnv._reload();
+	} catch (error) {
+		try {
+			await redisEnv.destroy();
+		} catch {
+			// Preserve the initialization error if cleanup also fails.
+		}
+
+		throw error;
+	}
 
 	return redisEnv;
 }

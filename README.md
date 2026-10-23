@@ -1,9 +1,10 @@
 # @redis-x/env
 
-Store your environment variables in Redis, but access them synchronously in your application.
-
 [![npm version](https://img.shields.io/npm/v/@redis-x/env.svg)](https://www.npmjs.com/package/@redis-x/env)
-[![license](https://img.shields.io/npm/l/@redis-x/env.svg)](https://github.com/redis-x/env/blob/main/LICENSE)
+[![Open on npmx.dev](https://npmx.dev/api/registry/badge/version/@redis-x/env?style=shieldsio&label=npmx.dev)](https://npmx.dev/package/@redis-x/env)
+[![license](https://img.shields.io/npm/l/@redis-x/env.svg?color=blue)](https://github.com/redis-x/env/blob/main/LICENSE)
+
+Store your environment variables in Redis, but access them synchronously in your application.
 
 ## Features
 
@@ -16,10 +17,10 @@ Store your environment variables in Redis, but access them synchronously in your
 ## Installation
 
 ```bash
-bun add @redis-x/env redis
-# or
+bun i @redis-x/env redis
+# or with pnpm
 pnpm add @redis-x/env redis
-# or
+# or with npm
 npm install @redis-x/env redis
 ```
 
@@ -27,7 +28,7 @@ npm install @redis-x/env redis
 
 ```typescript
 import { createClient } from 'redis';
-import { createRedisEnv } from '@redis-x/env';
+import { createRedisXEnv } from '@redis-x/env';
 import * as v from 'valibot';
 
 // Connect to Redis
@@ -45,22 +46,10 @@ const envValidator = v.parser(v.object({
     v.maxValue(65535),
   ),
   API_KEY: v.string(),
-  DEBUG: v.pipe(
-    v.string(),
-    v.transform((value) => value === 'true'),
-  ),
-  DATABASE_CONFIG: v.pipe(
-    v.string(),
-    v.transform((value) => JSON.parse(value)),
-    v.object({
-      host: v.string(),
-      port: v.number(),
-    }),
-  ),
 }));
 
 // Create RedisEnv instance
-const env = await createRedisEnv(
+const env = await createRedisXEnv(
   redisClient,
   'myapp', // namespace
   envValidator,
@@ -69,8 +58,6 @@ const env = await createRedisEnv(
 // Use your environment variables synchronously
 const port = env.get('PORT'); // returns a number
 const api_key = env.get('API_KEY'); // returns a string
-const is_debug = env.get('DEBUG'); // returns a boolean
-const db_config = env.get('DATABASE_CONFIG'); // returns an object
 
 // Get multiple values at once
 const { PORT, API_KEY } = env.mget('PORT', 'API_KEY');
@@ -79,17 +66,20 @@ const { PORT, API_KEY } = env.mget('PORT', 'API_KEY');
 ## How It Works
 
 1. Your environment variables are stored in Redis as a hash with the key `@x:env:{namespace}`
-2. When your application starts, `@redis-x/env` loads and validates all variables
-3. The library subscribes to Redis PubSub to detect changes to your environment
-4. If changes occur, the environment is automatically reloaded and validated
-5. Access is always synchronous after initial loading
+2. During initialization, the library subscribes to Redis PubSub, then loads and validates the hash
+3. Published changes and subscriber reconnections load and validate the hash again
+4. Reads are synchronous and return the cached validated values without another Redis request
+
+The validator runs once per load, so `get()` and `mget()` return the same values each time,
+and these values are not write-protected. This is a design choice. Do not modify returned objects,
+arrays or class instances: changes are visible to every later read until the next reload.
 
 ## Updating Environment Variables
 
 To update environment variables in Redis, update your hash and publish a message to `@x:env:{namespace}`:
 
 ```redis
-HSET @x:env:myapp PORT 3000 API_KEY secret-key DEBUG true DATABASE_CONFIG '{"host":"localhost","port":5432}'
+HSET @x:env:myapp PORT 3000 API_KEY secret-key
 PUBLISH @x:env:myapp 1
 ```
 
@@ -110,4 +100,4 @@ try {
 
 ## Contributing
 
-Issues and pull requests are welcome at [https://github.com/redis-x/env](https://github.com/redis-x/env).
+Issues and pull requests are welcome at [our GitHub repository](https://github.com/redis-x/env).
