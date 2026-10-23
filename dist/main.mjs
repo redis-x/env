@@ -7,7 +7,7 @@ var RedisXEnv = class {
 	#redisSubClient;
 	#namespace;
 	#validator;
-	/** The validated env, `false` if the latest loaded hash failed validation, or `null` before the first load. */
+	/** The validated env, `symbol_validation_failed` if the latest loaded hash failed validation, or `symbol_not_ready` before the first load. */
 	#storage = symbol_not_ready;
 	/** @internal */
 	_redis_key;

@@ -17,7 +17,7 @@ export class RedisXEnv<const T extends Record<string, unknown>> {
 	#redisSubClient: RedisClient;
 	#namespace: string;
 	#validator: (value: unknown) => T;
-	/** The validated env, `false` if the latest loaded hash failed validation, or `null` before the first load. */
+	/** The validated env, `symbol_validation_failed` if the latest loaded hash failed validation, or `symbol_not_ready` before the first load. */
 	#storage: T | typeof symbol_not_ready | typeof symbol_validation_failed =
 		symbol_not_ready;
 	/** @internal */

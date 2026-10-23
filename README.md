@@ -71,7 +71,7 @@ const { PORT, API_KEY } = env.mget('PORT', 'API_KEY');
 4. Reads are synchronous and return the cached validated values without another Redis request
 
 The validator runs once per load, so `get()` and `mget()` return the same values each time,
-and these values are not write-protected. This is design choice. Do not modify returned objects,
+and these values are not write-protected. This is a design choice. Do not modify returned objects,
 arrays or class instances: changes are visible to every later read until the next reload.
 
 ## Updating Environment Variables
