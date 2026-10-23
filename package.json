@@ -6,6 +6,9 @@
 		"access": "public"
 	},
 	"type": "module",
+	"files": [
+		"dist"
+	],
 	"exports": {
 		".": {
 			"types": {
