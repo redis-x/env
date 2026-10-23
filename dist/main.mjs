@@ -1,11 +1,14 @@
 //#region src/main.ts
 const no_new_symbol = Symbol("no_new");
+const symbol_not_ready = Symbol("not_ready");
+const symbol_validation_failed = Symbol("validation_failed");
 var RedisXEnv = class {
 	#redisClient;
 	#redisSubClient;
 	#namespace;
 	#validator;
-	#hash = null;
+	/** The validated env, `false` if the latest loaded hash failed validation, or `null` before the first load. */
+	#storage = symbol_not_ready;
 	/** @internal */
 	_redis_key;
 	constructor(redisClient, namespace, validator, _protection) {
@@ -30,15 +33,17 @@ var RedisXEnv = class {
 	}
 	/** @internal */
 	async _reload() {
-		this.#hash = await this.#redisClient.HGETALL(this._redis_key);
+		const hash = await this.#redisClient.HGETALL(this._redis_key);
+		try {
+			this.#storage = this.#validator(hash);
+		} catch {
+			this.#storage = symbol_validation_failed;
+		}
 	}
 	get #env() {
-		if (!this.#hash) throw new Error(`[@redis-x/env] Cannot read from namespace "${this.#namespace}" because it is not loaded. This is likely due to a RedisXEnv misconfiguration or an error on the Redis server.`);
-		try {
-			return this.#validator({ ...this.#hash });
-		} catch {
-			throw new Error(`[@redis-x/env] Validation failed for namespace "${this.#namespace}".`);
-		}
+		if (this.#storage === symbol_not_ready) throw new Error(`[@redis-x/env] Cannot read from namespace "${this.#namespace}" because it is not loaded. This is likely due to a RedisXEnv misconfiguration or an error on the Redis server.`);
+		if (this.#storage === symbol_validation_failed) throw new Error(`[@redis-x/env] Validation failed for namespace "${this.#namespace}".`);
+		return this.#storage;
 	}
 	get(key) {
 		return this.#env[key];

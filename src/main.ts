@@ -8,6 +8,8 @@ import type {
 type RedisClient = RedisClientType<RedisFunctions, RedisModules, RedisScripts>;
 
 const no_new_symbol: unique symbol = Symbol('no_new');
+const symbol_not_ready: unique symbol = Symbol('not_ready');
+const symbol_validation_failed: unique symbol = Symbol('validation_failed');
 
 // oxlint-disable-next-line unicorn/name-replacements
 export class RedisXEnv<const T extends Record<string, unknown>> {
@@ -15,7 +17,9 @@ export class RedisXEnv<const T extends Record<string, unknown>> {
 	#redisSubClient: RedisClient;
 	#namespace: string;
 	#validator: (value: unknown) => T;
-	#hash: Record<string, string> | null = null;
+	/** The validated env, `false` if the latest loaded hash failed validation, or `null` before the first load. */
+	#storage: T | typeof symbol_not_ready | typeof symbol_validation_failed =
+		symbol_not_ready;
 	/** @internal */
 	// eslint-disable-next-line unicorn/prefer-private-class-fields
 	_redis_key: string;
@@ -64,23 +68,30 @@ export class RedisXEnv<const T extends Record<string, unknown>> {
 	/** @internal */
 	// eslint-disable-next-line unicorn/prefer-private-class-fields
 	async _reload(): Promise<void> {
-		this.#hash = await this.#redisClient.HGETALL(this._redis_key);
+		const hash = await this.#redisClient.HGETALL(this._redis_key);
+
+		try {
+			this.#storage = this.#validator(hash);
+		} catch {
+			// Do not keep or log the error: validator diagnostics may contain rejected values.
+			this.#storage = symbol_validation_failed;
+		}
 	}
 
 	get #env(): T {
-		if (!this.#hash) {
+		if (this.#storage === symbol_not_ready) {
 			throw new Error(
 				`[@redis-x/env] Cannot read from namespace "${this.#namespace}" because it is not loaded. This is likely due to a RedisXEnv misconfiguration or an error on the Redis server.`,
 			);
 		}
 
-		try {
-			return this.#validator({ ...this.#hash });
-		} catch {
+		if (this.#storage === symbol_validation_failed) {
 			throw new Error(
 				`[@redis-x/env] Validation failed for namespace "${this.#namespace}".`,
 			);
 		}
+
+		return this.#storage;
 	}
 
 	get<const K extends keyof T>(key: K): T[K] {

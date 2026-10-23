@@ -18,11 +18,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-	await redisClient.DEL([
-		'@x:env:instances',
-		'@x:env:mutable',
-		'@x:env:secret',
-	]);
+	await redisClient.DEL(['@x:env:instances', '@x:env:reload', '@x:env:secret']);
 	await redisClient.quit();
 });
 
@@ -42,7 +38,7 @@ class Address {
 	}
 }
 
-describe('validation on reads', () => {
+describe('validation', () => {
 	let destroy: (() => Promise<void>) | undefined;
 
 	afterEach(async () => {
@@ -55,64 +51,56 @@ describe('validation on reads', () => {
 		}
 	});
 
-	test('validates once per read and preserves independent class instances', async () => {
+	test('validates once per load and returns the same values on every read', async () => {
 		await redisClient.HSET('@x:env:instances', { address: '127.0.0.1' });
 		let calls = 0;
 		const env = await createRedisXEnv(redisClient, 'instances', (data) => {
 			calls++;
 			const parsed = v.parse(v.object({ address: v.string() }), data);
-			const address = new Address(parsed.address);
-			return { address, sameAddress: address };
+			return { address: new Address(parsed.address) };
 		});
 		destroy = () => env.destroy();
-		expect(calls).toBe(0);
-
-		const first: Address = env.get('address');
 		expect(calls).toBe(1);
-		expect(first).toBeInstanceOf(Address);
-		first.set('changed');
 
-		const batch = env.mget('address', 'sameAddress');
-		const { address } = batch;
-		expect(calls).toBe(2);
-		expect(address.toString()).toBe('127.0.0.1');
-		expect(address).not.toBe(first);
-		expect(batch.sameAddress).toBe(address);
-		address.set('changed again');
-		expect(env.get('address').toString()).toBe('127.0.0.1');
-		expect(calls).toBe(3);
-
+		const address: Address = env.get('address');
+		expect(address).toBeInstanceOf(Address);
+		expect(env.get('address')).toBe(address);
+		expect(env.mget('address').address).toBe(address);
 		expect(env.mget()).toStrictEqual({});
-		expect(calls).toBe(4);
+		expect(calls).toBe(1);
+
+		await redisClient.HSET('@x:env:instances', { address: '10.0.0.1' });
+		await env._reload();
+		expect(calls).toBe(2);
+		expect(env.get('address')).not.toBe(address);
+		expect(env.get('address').toString()).toBe('10.0.0.1');
+		expect(address.toString()).toBe('127.0.0.1');
+		expect(calls).toBe(2);
 	});
 
-	test('isolates raw input and nested objects and arrays between reads', async () => {
-		const original = { details: { label: 'original' }, items: ['one'] };
-		await redisClient.HSET('@x:env:mutable', {
-			payload: JSON.stringify(original),
-		});
-		const env = await createRedisXEnv(redisClient, 'mutable', (data) => {
-			const hash = data as { payload: string };
-			const config = v.parse(
+	test('fails reads after a reload with an invalid hash and recovers on the next valid one', async () => {
+		await redisClient.HSET('@x:env:reload', { port: '3000' });
+		const env = await createRedisXEnv(
+			redisClient,
+			'reload',
+			v.parser(
 				v.object({
-					details: v.object({ label: v.string() }),
-					items: v.array(v.string()),
+					port: v.pipe(v.string(), v.transform(Number), v.minValue(1)),
 				}),
-				JSON.parse(hash.payload),
-			);
-			hash.payload = 'changed by validator';
-			return { config };
-		});
+			),
+		);
 		destroy = () => env.destroy();
+		expect(env.get('port')).toBe(3000);
 
-		const first = env.get('config');
-		first.details.label = 'changed';
-		first.items.push('two');
-		const second = env.mget('config').config;
-		expect(second).toStrictEqual(original);
-		second.details.label = 'changed again';
-		second.items.push('three');
-		expect(env.get('config')).toStrictEqual(original);
+		await redisClient.HSET('@x:env:reload', { port: '0' });
+		await env._reload();
+		expect(() => env.get('port')).toThrow(
+			'[@redis-x/env] Validation failed for namespace "reload".',
+		);
+
+		await redisClient.HSET('@x:env:reload', { port: '4000' });
+		await env._reload();
+		expect(env.get('port')).toBe(4000);
 	});
 
 	test('sanitizes validation errors without logging rejected values', async () => {

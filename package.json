@@ -1,6 +1,6 @@
 {
 	"name": "@redis-x/env",
-	"version": "0.2.0-dev",
+	"version": "0.2.1",
 	"description": "Store your env in Redis, but access it synchronously.",
 	"publishConfig": {
 		"access": "public"

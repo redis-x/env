@@ -1,6 +1,7 @@
 # @redis-x/env
 
 [![npm version](https://img.shields.io/npm/v/@redis-x/env.svg)](https://www.npmjs.com/package/@redis-x/env)
+[![Open on npmx.dev](https://npmx.dev/api/registry/badge/version/@redis-x/env?style=shieldsio&label=npmx.dev)](https://npmx.dev/package/@redis-x/env)
 [![license](https://img.shields.io/npm/l/@redis-x/env.svg?color=blue)](https://github.com/redis-x/env/blob/main/LICENSE)
 
 Store your environment variables in Redis, but access them synchronously in your application.
@@ -65,15 +66,13 @@ const { PORT, API_KEY } = env.mget('PORT', 'API_KEY');
 ## How It Works
 
 1. Your environment variables are stored in Redis as a hash with the key `@x:env:{namespace}`
-2. During initialization, the library subscribes to Redis PubSub and loads the raw hash
-3. Published changes and subscriber reconnections refresh the cached hash
-4. Each `get()` or `mget()` call validates and transforms a fresh copy of the entire cached hash; `mget()` runs the validator once for all requested keys
-5. Reads are synchronous and use the cached data without another Redis request
+2. During initialization, the library subscribes to Redis PubSub, then loads and validates the hash
+3. Published changes and subscriber reconnections load and validate the hash again
+4. Reads are synchronous and return the cached validated values without another Redis request
 
-Validators run on reads, not during initialization or refresh. They must return
-fresh mutable objects, including class instances, rather than shared defaults or
-cached instances. This lets callers modify returned values without affecting
-subsequent reads. Avoid side effects in validators, since every read runs them again.
+The validator runs once per load, so `get()` and `mget()` return the same values each time,
+and these values are not write-protected. This is design choice. Do not modify returned objects,
+arrays or class instances: changes are visible to every later read until the next reload.
 
 ## Updating Environment Variables
 
