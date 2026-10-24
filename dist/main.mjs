@@ -1,9 +1,10 @@
+import { getRedisXClient } from "@redis-x/client";
 //#region src/main.ts
 const no_new_symbol = Symbol("no_new");
 const symbol_not_ready = Symbol("not_ready");
 const symbol_validation_failed = Symbol("validation_failed");
 var RedisXEnv = class {
-	#redisClient;
+	#redisXClient;
 	#redisSubClient;
 	#namespace;
 	#validator;
@@ -13,8 +14,8 @@ var RedisXEnv = class {
 	_redis_key;
 	constructor(redisClient, namespace, validator, _protection) {
 		if (_protection !== no_new_symbol) throw new Error("[@redis-x/env] Do not use new RedisXEnv(), use createRedisXEnv() instead.");
-		this.#redisClient = redisClient;
-		this.#redisSubClient = redisClient.duplicate();
+		this.#redisXClient = getRedisXClient(redisClient);
+		this.#redisSubClient = this.#redisXClient["~redisClient"].duplicate();
 		this.#redisSubClient.on("error", (error) => {
 			console.error(error);
 		});
@@ -33,7 +34,7 @@ var RedisXEnv = class {
 	}
 	/** @internal */
 	async _reload() {
-		const hash = await this.#redisClient.HGETALL(this._redis_key);
+		const hash = await this.#redisXClient.HGETALL(this._redis_key);
 		try {
 			this.#storage = this.#validator(hash);
 		} catch {
@@ -60,7 +61,7 @@ var RedisXEnv = class {
 };
 /**
 * Creates a new RedisEnv instance.
-* @param redisClient The Redis client instance.
+* @param redisClient Client from the `redis` package or a RedisX client.
 * @param namespace The namespace for the environment.
 * @param validator The validator function for the environment.
 * @returns A new RedisEnv instance.

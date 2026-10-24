@@ -24,6 +24,12 @@ pnpm add @redis-x/env redis
 npm install @redis-x/env redis
 ```
 
+**Requirements**:
+
+- Node.js 15 or newer;
+- `redis@^4.6`;
+- (optional) [`@redis-x/client`](https://github.com/redis-x/client).
+
 ## Quick Start
 
 ```typescript
@@ -62,6 +68,8 @@ const api_key = env.get('API_KEY'); // returns a string
 // Get multiple values at once
 const { PORT, API_KEY } = env.mget('PORT', 'API_KEY');
 ```
+
+`createRedisXEnv()` accepts either a plain `redis` client or a `RedisXClient` from [`@redis-x/client`](https://github.com/redis-x/client) package. If you already use `RedisXClient` in your project, pass it to avoid duplicating `RedisXClient` instances.
 
 ## How It Works
 

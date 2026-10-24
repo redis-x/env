@@ -1,3 +1,4 @@
+import { getRedisXClient, type RedisXClient } from '@redis-x/client';
 import type {
 	RedisClientType,
 	RedisFunctions,
@@ -5,7 +6,7 @@ import type {
 	RedisScripts,
 } from 'redis';
 
-type RedisClient = RedisClientType<RedisFunctions, RedisModules, RedisScripts>;
+type RedisClient = RedisClientType<RedisModules, RedisFunctions, RedisScripts>;
 
 const no_new_symbol: unique symbol = Symbol('no_new');
 const symbol_not_ready: unique symbol = Symbol('not_ready');
@@ -13,7 +14,7 @@ const symbol_validation_failed: unique symbol = Symbol('validation_failed');
 
 // oxlint-disable-next-line unicorn/name-replacements
 export class RedisXEnv<const T extends Record<string, unknown>> {
-	#redisClient: RedisClient;
+	#redisXClient: RedisXClient;
 	#redisSubClient: RedisClient;
 	#namespace: string;
 	#validator: (value: unknown) => T;
@@ -25,7 +26,7 @@ export class RedisXEnv<const T extends Record<string, unknown>> {
 	_redis_key: string;
 
 	constructor(
-		redisClient: RedisClient,
+		redisClient: RedisClient | RedisXClient,
 		namespace: string,
 		validator: (value: unknown) => T,
 		_protection: typeof no_new_symbol,
@@ -36,8 +37,8 @@ export class RedisXEnv<const T extends Record<string, unknown>> {
 			);
 		}
 
-		this.#redisClient = redisClient;
-		this.#redisSubClient = redisClient.duplicate();
+		this.#redisXClient = getRedisXClient(redisClient);
+		this.#redisSubClient = this.#redisXClient['~redisClient'].duplicate();
 		this.#redisSubClient.on('error', (error) => {
 			// oxlint-disable-next-line no-console
 			console.error(error);
@@ -68,7 +69,7 @@ export class RedisXEnv<const T extends Record<string, unknown>> {
 	/** @internal */
 	// eslint-disable-next-line unicorn/prefer-private-class-fields
 	async _reload(): Promise<void> {
-		const hash = await this.#redisClient.HGETALL(this._redis_key);
+		const hash = await this.#redisXClient.HGETALL(this._redis_key);
 
 		try {
 			this.#storage = this.#validator(hash);
@@ -119,13 +120,13 @@ export class RedisXEnv<const T extends Record<string, unknown>> {
 
 /**
  * Creates a new RedisEnv instance.
- * @param redisClient The Redis client instance.
+ * @param redisClient Client from the `redis` package or a RedisX client.
  * @param namespace The namespace for the environment.
  * @param validator The validator function for the environment.
  * @returns A new RedisEnv instance.
  */
 export async function createRedisXEnv<const T extends Record<string, unknown>>(
-	redisClient: RedisClient,
+	redisClient: RedisClient | RedisXClient,
 	namespace: string,
 	validator: (value: unknown) => T,
 ): Promise<RedisXEnv<T>> {
