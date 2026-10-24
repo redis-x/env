@@ -1,5 +1,6 @@
 /* eslint-disable jsdoc/require-jsdoc */
 
+import { getRedisXClient, RedisXClient } from '@redis-x/client';
 import { createClient } from 'redis';
 import * as v from 'valibot';
 import {
@@ -9,6 +10,7 @@ import {
 	describe,
 	expect,
 	test,
+	vi,
 } from 'vitest';
 import { createRedisXEnv } from './main.js';
 
@@ -162,6 +164,40 @@ test('namespace does not exist', async () => {
 			'bar',
 		),
 	).toThrow('Validation failed for namespace "test"');
+});
+
+describe('clients', () => {
+	test('accepts a RedisX client', async () => {
+		await updateEnv({ foo: 'bar' });
+		const env = await createRedisXEnv(
+			new RedisXClient(redisClient),
+			'test',
+			v.parser(v.object({ foo: v.string() })),
+		);
+		expect(env.get('foo')).toBe('bar');
+
+		await redisClient
+			.MULTI()
+			.HSET(env._redis_key, 'foo', 'baz')
+			.PUBLISH(env._redis_key, '')
+			.EXEC();
+		await waitForValue(() => env.get('foo'), 'baz');
+		await env.destroy();
+	});
+
+	test('runs commands through the RedisX client that getRedisXClient returns', async () => {
+		await updateEnv({ foo: 'bar' });
+		const hgetall = vi.spyOn(getRedisXClient(redisClient), 'HGETALL');
+		const env = await createRedisXEnv(
+			redisClient,
+			'test',
+			v.parser(v.object({ foo: v.string() })),
+		);
+
+		expect(hgetall).toHaveBeenCalledWith('@x:env:test');
+		hgetall.mockRestore();
+		await env.destroy();
+	});
 });
 
 describe('connection lifecycle', () => {
