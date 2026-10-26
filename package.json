@@ -59,7 +59,9 @@
 		"env",
 		"environment",
 		"config",
-		"configuration"
+		"configuration",
+		"pubsub",
+		"validation"
 	],
 	"author": "Daniil Kirichenko (https://twitter.com/kirickme)",
 	"license": "MIT",
